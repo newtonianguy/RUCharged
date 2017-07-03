@@ -13,6 +13,8 @@ import android.widget.Toast;
 
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
+import com.google.firebase.auth.AuthCredential;
+import com.google.firebase.auth.EmailAuthProvider;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.UserInfo;
@@ -22,6 +24,7 @@ import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.Exclude;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.IgnoreExtraProperties;
+import com.google.firebase.database.Query;
 import com.google.firebase.database.ValueEventListener;
 
 import java.util.HashMap;
@@ -29,6 +32,8 @@ import java.util.Map;
 
 public class UpdateActivity extends AppCompatActivity implements View.OnClickListener{
     private FirebaseAuth mAuth;
+    private EditText OldEmail;
+    private EditText OldPassword;
     private EditText Username;
     private EditText Password;
     private EditText Email;
@@ -37,7 +42,20 @@ public class UpdateActivity extends AppCompatActivity implements View.OnClickLis
     private FirebaseAuth.AuthStateListener mAuthListener;
     private DatabaseReference databaseReference;
     private FirebaseUser user;
+    //Puts up current profile details
+    private String myUserId;
+    //Specifies which child in database to listen for
+    private Query myTopPostsQuery;
+    //Listener for Database
+    private ValueEventListener postListener;
 
+    /*
+    ///
+    ///
+    ///
+    ///
+    ///
+     */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -48,6 +66,8 @@ public class UpdateActivity extends AppCompatActivity implements View.OnClickLis
         Email = (EditText) findViewById(R.id.uEmail);
         Type = (EditText) findViewById(R.id.uType);
         update = (Button) findViewById(R.id.uUpdate);
+        OldEmail=(EditText)findViewById(R.id.uOldEmail);
+        OldPassword=(EditText)findViewById(R.id.uOldPassword);
         mAuth = FirebaseAuth.getInstance();
         databaseReference = FirebaseDatabase.getInstance().getReference();
         //Sets listener for button
@@ -58,17 +78,18 @@ public class UpdateActivity extends AppCompatActivity implements View.OnClickLis
         if(user!=null){
                 //email address
                 String email = user.getEmail();
-                Email.setText(email);
+                OldEmail.setText(email);
         }
-        //Puts up current profile details
-
-        ValueEventListener postListener = new ValueEventListener() {
+        //Initializes listener data
+        myUserId = user.getUid();
+        myTopPostsQuery = databaseReference.child("users").child(myUserId)
+                .orderByChild("name");
+        postListener = new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
-                // Get Post object and use the values to update the UI
                 Post post = dataSnapshot.getValue(Post.class);
-                String name = post.getName();
-                String type = post.getType();
+                String name=post.name;
+                String type=post.type;
                 Username.setText(name);
                 Type.setText(type);
             }
@@ -76,11 +97,12 @@ public class UpdateActivity extends AppCompatActivity implements View.OnClickLis
             @Override
             public void onCancelled(DatabaseError databaseError) {
                 // Getting Post failed, log a message
+                Toast.makeText(UpdateActivity.this, "Couldn't retrieve data", Toast.LENGTH_SHORT).show();
                 // ...
             }
         };
-        databaseReference.addListenerForSingleValueEvent(postListener);
-
+        //Attaches Listener to query
+        myTopPostsQuery.addValueEventListener(postListener);
     }
     /*
     //
@@ -90,17 +112,33 @@ public class UpdateActivity extends AppCompatActivity implements View.OnClickLis
      */
     //updates Users profile
     public void updateUserInformation(){
-
         //Declares variables for storage
+        String oldEmail=OldEmail.getText().toString();
+        String oldPassword=OldPassword.getText().toString();
         String name = Username.getText().toString();
         String CarType = Type.getText().toString();
         String email = Email.getText().toString();
         String password=Password.getText().toString();
+        //Reauthenticates user for password and email update
+        // Get auth credentials from the user for re-authentication. The example below shows
+// email and password credentials but there are multiple possible providers,
+// such as GoogleAuthProvider or FacebookAuthProvider.
+        AuthCredential credential = EmailAuthProvider
+                .getCredential(oldEmail, oldPassword);
 
+// Prompt the user to re-provide their sign-in credentials
+        user.reauthenticate(credential)
+                .addOnCompleteListener(new OnCompleteListener<Void>() {
+                    @Override
+                    public void onComplete(@NonNull Task<Void> task) {
+                        Toast.makeText(UpdateActivity.this, "Account Reauthentication Successful",
+                                Toast.LENGTH_SHORT).show();
+                    }
+                });
         //Checks email
         if(TextUtils.isEmpty(email)) {
             //if username is empty do this
-            Toast.makeText(this, "Please enter email", Toast.LENGTH_SHORT).show();
+            Toast.makeText(UpdateActivity.this, "Please enter email", Toast.LENGTH_SHORT).show();
             //stopping the function execution further
             return;
         }
@@ -114,14 +152,13 @@ public class UpdateActivity extends AppCompatActivity implements View.OnClickLis
                                     Toast.LENGTH_SHORT).show();
                         }
                         else {
-                            Toast.makeText(UpdateActivity.this, "Credential too old. Login again. Then try to update profile",
+                            Toast.makeText(UpdateActivity.this, "There was an error while updating your email",
                                     Toast.LENGTH_SHORT).show();
                             mAuth.signOut();
                             startActivity(new Intent(UpdateActivity.this,MainActivity.class));
                         }
                     }
                 });
-
         //Checks password
         if(password.length() < 6 ){
             //if password is empty
@@ -139,10 +176,8 @@ public class UpdateActivity extends AppCompatActivity implements View.OnClickLis
                                     Toast.LENGTH_SHORT).show();
                         }
                         else{
-                            Toast.makeText(UpdateActivity.this, "Credential too old. Login again. Then try to update profile",
+                            Toast.makeText(UpdateActivity.this, "There was an error while updating your password",
                                     Toast.LENGTH_SHORT).show();
-                            mAuth.signOut();
-                            startActivity(new Intent(UpdateActivity.this,MainActivity.class));
                         }
                     }
                 });
@@ -166,40 +201,8 @@ public class UpdateActivity extends AppCompatActivity implements View.OnClickLis
     //
     //
      */
-    //Class for updating user information
-    @IgnoreExtraProperties
-    public class Post {
 
-        public String name;
-        public String type;
 
-        // Default constructor required for calls to DataSnapshot.getValue(Post.class)
-        public Post(){
-            this.name=null;
-            this.type=null;
-        }
-
-        public Post(String Name, String Type) {
-            this.name = Name;
-            this.type = Type;
-        }
-        //Get methods
-        public String getName(){
-            return name;
-        }
-        public String getType(){
-            return type;
-        }
-
-        @Exclude
-        public Map<String, Object> toMap() {
-            HashMap<String, Object> result = new HashMap<>();
-            result.put("name", name);
-            result.put("type", type);
-            return result;
-        }
-
-    }
     /*
     //
     //
@@ -210,7 +213,10 @@ public class UpdateActivity extends AppCompatActivity implements View.OnClickLis
     @Override
     public void onClick(View v) {
         updateUserInformation();
+        //detaches listener
+        myTopPostsQuery.removeEventListener(postListener);
+        //goes back to homescreen
         startActivity(new Intent(UpdateActivity.this,HomeScreenActivity.class));
-    };
+    }
 
 }

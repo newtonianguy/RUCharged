@@ -15,6 +15,14 @@ import android.view.View;
 import android.widget.Toast;
 
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.Query;
+import com.google.firebase.database.ValueEventListener;
+import com.google.firebase.iid.FirebaseInstanceId;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -29,22 +37,27 @@ import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.ProtocolException;
 import java.net.URL;
+import java.util.HashMap;
 import java.util.Hashtable;
+import java.util.Map;
 
 
 public class HomeScreenActivity extends AppCompatActivity implements View.OnClickListener{
+    //Keeps track of whether you are logged in or not
+    private boolean logStatus;
+    //Keeps track of which station
+    private String stationTracker;
     //String variables
     private String API_URL1="https://lit-retreat-58620.herokuapp.com/nearCait";
     private String API_URL2="https://lit-retreat-58620.herokuapp.com/nearHandicap";
     private String a="Unavailable";
     private String b="Send Request to Person";
-    private String c="Log Into Station";
+    private String c="Login to Station";
     private String d="Loading";
-    //For tracking when someone logs in
-    private boolean Log1=false;
-    private boolean Log2=false;
-    private boolean Log3=false;
-    private boolean Log4=false;
+    private String e="Logout of Station";
+    private String f;
+    //Message token
+    String token= FirebaseInstanceId.getInstance().getToken();
     //Variables for visible stuff
     private TextView Station1;
     private TextView Station2;
@@ -69,6 +82,12 @@ public class HomeScreenActivity extends AppCompatActivity implements View.OnClic
     private NotificationCompat.Builder mBuilder;
     //For logout
     private FirebaseAuth mAuth;
+    private DatabaseReference databaseReference;
+    private FirebaseUser user;
+    //Specifies which child in database to listen for
+    private Query myTopPostsQuery;
+    //Listener for Database
+    private ValueEventListener postListener;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -95,10 +114,14 @@ public class HomeScreenActivity extends AppCompatActivity implements View.OnClic
         Logout=(Button)findViewById(R.id.hLogOut);
         Update=(Button)findViewById(R.id.hUpdate);
         Refresh=(Button)findViewById(R.id.hRefresh);
+        databaseReference = FirebaseDatabase.getInstance().getReference();
+        //Gets current User
+        user=mAuth.getCurrentUser();
         //Sets Listeners for buttons
         Login1.setOnClickListener(this);
         Login2.setOnClickListener(this);
         Login3.setOnClickListener(this);
+        Login4.setOnClickListener(this);
         Logout.setOnClickListener(this);
         Update.setOnClickListener(this);
         Refresh.setOnClickListener(this);
@@ -120,6 +143,17 @@ public class HomeScreenActivity extends AppCompatActivity implements View.OnClic
                         PendingIntent.FLAG_UPDATE_CURRENT
                 );
         mBuilder.setContentIntent(resultPendingIntent);
+        //Checks to see who is logged into a station already
+        //Initializes listener for database
+        Query myTopPostsQuery1 = databaseReference.child("stations").child("Log1").orderByChild("name");
+        Query myTopPostsQuery2 = databaseReference.child("stations").child("Log2").orderByChild("name");
+        Query myTopPostsQuery3 = databaseReference.child("stations").child("Log3").orderByChild("name");
+        Query myTopPostsQuery4 = databaseReference.child("stations").child("Log4").orderByChild("name");
+
+        Retriever(myTopPostsQuery1,Login1);
+        Retriever(myTopPostsQuery2,Login2);
+        Retriever(myTopPostsQuery3,Login3);
+        Retriever(myTopPostsQuery4,Login4);
 
         //Access api response from custom website
         new JuicenetApi().execute(API_URL1);
@@ -137,10 +171,8 @@ public class HomeScreenActivity extends AppCompatActivity implements View.OnClic
         private ProgressBar Status;
         private Button Login;
         protected void onPreExecute(){
-            Login1.setText("Loading");
-            TimeLeft1.setText("Loading");
-            Login3.setText("Loading");
-            TimeLeft3.setText("Loading");
+            TimeLeft1.setText(d);
+            TimeLeft3.setText(d);
         }
         ///
         ///
@@ -215,9 +247,11 @@ public class HomeScreenActivity extends AppCompatActivity implements View.OnClic
                     Integer timeRemaining=timeLeft/60;
                     Integer percent=( (timeSoFar*100) / max) ;
                     TimeLeft.setText( (timeSoFar/60) +" minutes // "+timeRemaining+" minutes // "+percent+"%");
-                    Login.setText(a);
+                    if( logStatus ){
+                        Login.setText(a);
+                    }
                     //Issues notification when car is 90% charged
-                    if( ( (timeSoFar*100) / max) > 90 ){
+                        if( ( (timeSoFar*100) / max) > 90 ){
                         // Sets an ID for the notification
                         int mNotificationId = 001;
                         // Gets an instance of the NotificationManager service
@@ -233,22 +267,26 @@ public class HomeScreenActivity extends AppCompatActivity implements View.OnClic
                     Status.setMax(max);
                     Status.setProgress(timeSoFar);
                     TimeLeft.setText(R.string.notCharging);
-                    Login.setText(b);
+                    if( logStatus ){
+                        Login.setText(b);
+                    }
                 }
                 //When the Station is not plugged in or something else
                 else{
                     TimeLeft.setText(R.string.open);
-                    Login.setText(c);
+                    if( logStatus ){
+                        Login.setText(c);
+                    }
                     Status.setMax(max);
                     Status.setProgress(0);
                 }
             //Catches errors in JSON conversion from string
-            } catch (JSONException e) {
-                e.printStackTrace();
-                response = "THERE WAS JSON ERROR";
-                Station.setText(response);
-                return;
-            }
+        } catch (JSONException e) {
+            e.printStackTrace();
+            response = "THERE WAS JSON ERROR";
+            Station.setText(response);
+            return;
+        }
         }
     }
 /*
@@ -257,6 +295,107 @@ public class HomeScreenActivity extends AppCompatActivity implements View.OnClic
 //
 //
  */
+//sets Station Tracker
+    public String Tracker(final Button log){
+        if(log==Login1){
+            return "Station 1";
+        }
+        else if(log==Login2){
+            return "Station 2";
+        }
+        else if(log==Login3){
+            return "Station 3";
+        }
+        else{
+            return "Station 4";
+        }
+    }
+//Retrieves data from database to see who is logged into a station
+    public void Retriever(Query myTopPostsQuery,final Button log){
+        postListener = new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                Logger post = dataSnapshot.getValue(Logger.class);
+
+                String name=post.name;
+                if( name.equals( token.toString() ) ){
+                    log.setText(e);
+                    logStatus=true;
+                    stationTracker= Tracker(log);
+                }
+
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+                // Getting Post failed, log a message
+                Toast.makeText(HomeScreenActivity.this, "Couldn't retrieve data", Toast.LENGTH_SHORT).show();
+                // ...
+            }
+        };
+        myTopPostsQuery.addValueEventListener(postListener);
+    }
+    /*
+    //
+    //
+    //
+    //
+    //
+     */
+//Logs a person into a desired station
+public void Login(String log){
+    //Checks log status
+    if(logStatus){
+        Toast.makeText(HomeScreenActivity.this, "You can't login to two stations",
+                Toast.LENGTH_SHORT).show();
+                f=c;
+        return;
+    }
+    //Declares variables for storage
+    String myUserId = token;
+    //Initializes user information
+    Logger post = new Logger(myUserId);
+    Map<String, Object> postValues = post.toMap();
+    Map<String, Object> childUpdates = new HashMap<>();
+    childUpdates.put("/stations/" + log , postValues);
+    //Updates database with new info
+    databaseReference.updateChildren(childUpdates);
+    //Tells User operation was successful
+    Toast.makeText(HomeScreenActivity.this, "You are logged into the station.",
+            Toast.LENGTH_SHORT).show();
+    //Sets log Status
+    logStatus=true;
+    f=e;
+
+}
+    /*
+    //
+    //
+    //
+    //
+     */
+    public void Logout(String log){
+        //Declares variables for storage
+        String myUserId = "None";
+        //Initializes user information
+        Logger post = new Logger(myUserId);
+        Map<String, Object> postValues = post.toMap();
+        Map<String, Object> childUpdates = new HashMap<>();
+        childUpdates.put("/stations/" + log , postValues);
+        //Updates database with new info
+        databaseReference.updateChildren(childUpdates);
+        //Tells User operation was successful
+        Toast.makeText(HomeScreenActivity.this, "You are logged out of the station.",
+                Toast.LENGTH_SHORT).show();
+        //Sets log Status
+        logStatus=false;
+    }
+    /*
+    //
+    //
+    //
+    //
+     */
 //What happens when a button is clicked
     @Override
     public void onClick(View v) {
@@ -270,9 +409,12 @@ public class HomeScreenActivity extends AppCompatActivity implements View.OnClic
 
             }
             else if( Login1.getText().equals(c) ){
-                Log1=true;
-                Toast.makeText(HomeScreenActivity.this, "You are logged into the station.",
-                        Toast.LENGTH_SHORT).show();
+                Login("Log1");
+                Login1.setText(f);
+            }
+            else if( Login1.getText().equals(e) ){
+                Logout("Log1");
+                Login1.setText(c);
             }
         }
 
@@ -286,9 +428,12 @@ public class HomeScreenActivity extends AppCompatActivity implements View.OnClic
 
             }
             else if( Login2.getText().equals(c) ){
-                Log2=true;
-                Toast.makeText(HomeScreenActivity.this, "You are logged into the station.",
-                        Toast.LENGTH_SHORT).show();
+                Login("Log2");
+                Login2.setText(f);
+            }
+            else if( Login2.getText().equals(e) ){
+                Logout("Log2");
+                Login2.setText(c);
             }
         }
 
@@ -302,9 +447,31 @@ public class HomeScreenActivity extends AppCompatActivity implements View.OnClic
 
             }
             else if( Login3.getText().equals(c) ){
-                Log3=true;
-                Toast.makeText(HomeScreenActivity.this, "You are logged into the station.",
+                Login("Log3");
+                Login3.setText(f);
+            }
+            else if( Login3.getText().equals(e) ){
+                Logout("Log3");
+                Login3.setText(c);
+            }
+        }
+
+        //Station 4
+        else if(v==Login4){
+            if( Login4.getText().equals(a) ) {
+                Toast.makeText(HomeScreenActivity.this, "You can't log in while someone's car is charging.",
                         Toast.LENGTH_SHORT).show();
+            }
+            else if( Login4.getText().equals(b) ){
+
+            }
+            else if( Login4.getText().equals(c) ){
+                Login("Log4");
+                Login4.setText(f);
+            }
+            else if( Login4.getText().equals(e) ){
+                Logout("Log4");
+                Login4.setText(c);
             }
         }
         //Logout
