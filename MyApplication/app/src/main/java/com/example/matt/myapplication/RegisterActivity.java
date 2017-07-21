@@ -1,15 +1,21 @@
 package com.example.matt.myapplication;
 
+import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.support.annotation.NonNull;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
 
+import com.example.matt.myapplication.Manifest.permission;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.AuthResult;
@@ -18,30 +24,43 @@ import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 
+import static android.Manifest.permission.READ_PHONE_STATE;
+import static android.Manifest.permission.SEND_SMS;
+
+
 public class RegisterActivity extends AppCompatActivity implements View.OnClickListener{
     private FirebaseAuth mAuth;
     private EditText Username;
     private EditText Password;
     private EditText Email;
     private EditText Type;
+    private String PhoneNo;
     private Button register;
     private FirebaseAuth.AuthStateListener mAuthListener;
     private DatabaseReference databaseReference;
+
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_register);
+        //Adds permissions
+        ActivityCompat.requestPermissions(this,new String[]{SEND_SMS},1);
+        ActivityCompat.requestPermissions(this,new String[]{READ_PHONE_STATE},1);
         //Initializes variables
         Username = (EditText) findViewById(R.id.rUsername);
         Password = (EditText) findViewById(R.id.rPassword);
         Email = (EditText) findViewById(R.id.rEmail);
         Type = (EditText) findViewById(R.id.rType);
+        TelephonyManager tMgr = (TelephonyManager)this.getSystemService(Context.TELEPHONY_SERVICE);
+        PhoneNo = tMgr.getLine1Number();
         register = (Button) findViewById(R.id.rRegister);
         mAuth = FirebaseAuth.getInstance();
         databaseReference = FirebaseDatabase.getInstance().getReference();
         //Sets listener for button
         register.setOnClickListener(this);
+
     }
 
 //Registers User
@@ -93,28 +112,33 @@ public class RegisterActivity extends AppCompatActivity implements View.OnClickL
         //Declares variables for storage
         String name = Username.getText().toString();
         String CarType = Type.getText().toString();
+        String Number=PhoneNo;
 
         //Initializes user information
-        User userInformation = new User(name, CarType);
+        User userInformation = new User(name, CarType,Number);
         //Gets current User for user Id
         FirebaseUser user = mAuth.getCurrentUser();
         //Stores information
         databaseReference.child("users").child( user.getUid() ).setValue(userInformation);
     }
 
+
+
     //Class for saving user information
     public class User {
 
         public String name;
         public String type;
+        public String number;
 
         public User() {
             // Default constructor required for calls to DataSnapshot.getValue(User.class)
         }
 
-        public User(String Name, String Type) {
+        public User(String Name, String Type,String Number) {
             this.name = Name;
             this.type = Type;
+            this.number=Number;
         }
 
     }

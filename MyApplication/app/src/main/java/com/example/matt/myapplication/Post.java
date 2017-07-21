@@ -13,15 +13,17 @@ import java.util.Map;
 public class Post {
     public String name;
     public String type;
+    public String number;
 
     // Default constructor required for calls to DataSnapshot.getValue(Post.class)
     public Post(){
 
     }
 
-    public Post(String Name, String Type) {
+    public Post(String Name, String Type, String Number) {
         this.name = Name;
         this.type = Type;
+        this.number =Number;
     }
 
     @Exclude
@@ -29,6 +31,7 @@ public class Post {
         HashMap<String, Object> result = new HashMap<>();
         result.put("name", name);
         result.put("type", type);
+        result.put("number",number);
         return result;
     }
 

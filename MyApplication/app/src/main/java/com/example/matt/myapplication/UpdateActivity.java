@@ -1,9 +1,11 @@
 package com.example.matt.myapplication;
 
+import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
+import android.telephony.TelephonyManager;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
@@ -38,14 +40,13 @@ public class UpdateActivity extends AppCompatActivity implements View.OnClickLis
     private EditText Password;
     private EditText Email;
     private EditText Type;
+    private String PhoneNo;
     private Button update;
     private FirebaseAuth.AuthStateListener mAuthListener;
     private DatabaseReference databaseReference;
     private FirebaseUser user;
     //Puts up current profile details
     private String myUserId;
-    //Specifies which child in database to listen for
-    private Query myTopPostsQuery;
     //Listener for Database
     private ValueEventListener postListener;
 
@@ -68,6 +69,8 @@ public class UpdateActivity extends AppCompatActivity implements View.OnClickLis
         update = (Button) findViewById(R.id.uUpdate);
         OldEmail=(EditText)findViewById(R.id.uOldEmail);
         OldPassword=(EditText)findViewById(R.id.uOldPassword);
+        TelephonyManager tMgr = (TelephonyManager)this.getSystemService(Context.TELEPHONY_SERVICE);
+        PhoneNo = tMgr.getLine1Number();
         mAuth = FirebaseAuth.getInstance();
         databaseReference = FirebaseDatabase.getInstance().getReference();
         //Sets listener for button
@@ -82,12 +85,12 @@ public class UpdateActivity extends AppCompatActivity implements View.OnClickLis
         }
         //Initializes listener data
         myUserId = user.getUid();
-        myTopPostsQuery = databaseReference.child("users").child(myUserId)
-                .orderByChild("name");
+
         postListener = new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
-                Post post = dataSnapshot.getValue(Post.class);
+                Post post = dataSnapshot.child("users").child(myUserId).getValue(Post.class);
+
                 String name=post.name;
                 String type=post.type;
                 Username.setText(name);
@@ -102,7 +105,7 @@ public class UpdateActivity extends AppCompatActivity implements View.OnClickLis
             }
         };
         //Attaches Listener to query
-        myTopPostsQuery.addValueEventListener(postListener);
+        databaseReference.addValueEventListener(postListener);
     }
     /*
     //
@@ -119,6 +122,7 @@ public class UpdateActivity extends AppCompatActivity implements View.OnClickLis
         String CarType = Type.getText().toString();
         String email = Email.getText().toString();
         String password=Password.getText().toString();
+        String phoneNo=PhoneNo;
         //Reauthenticates user for password and email update
         // Get auth credentials from the user for re-authentication. The example below shows
 // email and password credentials but there are multiple possible providers,
@@ -183,7 +187,7 @@ public class UpdateActivity extends AppCompatActivity implements View.OnClickLis
                 });
 
         //Initializes user information
-        Post post = new Post(name,CarType);
+        Post post = new Post(name,CarType,phoneNo);
         Map<String, Object> postValues = post.toMap();
 
         Map<String, Object> childUpdates = new HashMap<>();
@@ -200,21 +204,13 @@ public class UpdateActivity extends AppCompatActivity implements View.OnClickLis
     //
     //
     //
-     */
-
-
-    /*
-    //
-    //
-    //
-    //
     */
 //Registers user and moves to homescreen when button is clicked
     @Override
     public void onClick(View v) {
         updateUserInformation();
         //detaches listener
-        myTopPostsQuery.removeEventListener(postListener);
+        databaseReference.removeEventListener(postListener);
         //goes back to homescreen
         startActivity(new Intent(UpdateActivity.this,HomeScreenActivity.class));
     }

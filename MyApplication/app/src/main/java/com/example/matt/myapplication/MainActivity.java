@@ -2,6 +2,7 @@ package com.example.matt.myapplication;
 
 import android.content.Intent;
 import android.support.annotation.NonNull;
+import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -17,6 +18,9 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.AuthResult;
 import com.google.firebase.auth.FirebaseUser;
 
+import static android.Manifest.permission.READ_PHONE_STATE;
+import static android.Manifest.permission.SEND_SMS;
+
 public class MainActivity extends AppCompatActivity implements View.OnClickListener{
 
     private EditText username;
@@ -29,6 +33,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        ActivityCompat.requestPermissions(this,new String[]{SEND_SMS},1);
+        ActivityCompat.requestPermissions(this,new String[]{READ_PHONE_STATE},1);
         //instantiates variables
         mAuth = FirebaseAuth.getInstance();
         username = (EditText) findViewById(R.id.bUsername);
@@ -47,6 +53,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             finish();
             startActivity(new Intent(getApplicationContext(),HomeScreenActivity.class));
         }
+
     }
 
     public void signIn(){
