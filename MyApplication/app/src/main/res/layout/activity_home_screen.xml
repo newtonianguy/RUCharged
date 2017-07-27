@@ -4,7 +4,8 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context="com.example.matt.myapplication.HomeScreenActivity">
+    tools:context="com.example.matt.myapplication.HomeScreenActivity"
+    android:background="@drawable/backgroundtest3">
 
     <TextView
         android:id="@+id/hStation1"
@@ -12,6 +13,7 @@
         android:layout_height="25dp"
         android:layout_marginTop="34dp"
         android:text="@string/Station1"
+        app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toLeftOf="@+id/hLogin1"
         app:layout_constraintTop_toTopOf="parent" />
@@ -27,7 +29,7 @@
 
     <TextView
         android:id="@+id/hStation3"
-        android:layout_width="124dp"
+        android:layout_width="128dp"
         android:layout_height="29dp"
         android:layout_marginTop="34dp"
         android:text="@string/Station3"
@@ -63,6 +65,7 @@
         android:id="@+id/hTimeLeft1"
         android:layout_width="0dp"
         android:layout_height="29dp"
+        android:layout_marginTop="-8dp"
         android:text="@string/open"
         app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintLeft_toRightOf="@+id/hStatus1"
@@ -93,8 +96,9 @@
         android:id="@+id/hLogin1"
         android:layout_width="0dp"
         android:layout_height="48dp"
-        android:text="@string/LoginStation"
+        android:background="@drawable/loginbuttongreen"
         app:layout_constraintBaseline_toBaselineOf="@+id/hStation1"
+        app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintLeft_toRightOf="@+id/hStatus1"
         app:layout_constraintRight_toRightOf="parent" />
 
@@ -102,7 +106,7 @@
         android:id="@+id/hLogin2"
         android:layout_width="0dp"
         android:layout_height="48dp"
-        android:text="@string/LoginStation"
+        android:background="@drawable/loginbuttongreen"
         app:layout_constraintBaseline_toBaselineOf="@+id/hStation2"
         app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintLeft_toRightOf="@+id/hStation2"
@@ -112,7 +116,7 @@
         android:id="@+id/hLogin3"
         android:layout_width="0dp"
         android:layout_height="48dp"
-        android:text="@string/LoginStation"
+        android:background="@drawable/loginbuttongreen"
         app:layout_constraintBaseline_toBaselineOf="@+id/hStation3"
         app:layout_constraintHorizontal_bias="1.0"
         app:layout_constraintLeft_toRightOf="@+id/hStation3"
@@ -123,55 +127,56 @@
         android:layout_width="0dp"
         android:layout_height="48dp"
         android:layout_marginBottom="8dp"
-        android:text="@string/logout"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintLeft_toRightOf="@+id/hUpdate"
-        app:layout_constraintRight_toRightOf="parent" />
+        app:layout_constraintRight_toRightOf="parent"
+        android:background="@drawable/logoutbuttonhome"/>
 
     <Button
         android:id="@+id/hUpdate"
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
+        android:layout_height="48dp"
         android:layout_marginBottom="8dp"
         android:layout_marginEnd="8dp"
         android:layout_marginRight="8dp"
-        android:text="@string/UpdateProfile"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintHorizontal_bias="0.349"
         app:layout_constraintLeft_toLeftOf="parent"
-        app:layout_constraintRight_toLeftOf="@+id/hLogOut" />
+        app:layout_constraintRight_toLeftOf="@+id/hLogOut"
+        android:background="@drawable/updatebutton"/>
 
     <Button
         android:id="@+id/hRefresh"
         android:layout_width="88dp"
         android:layout_height="48dp"
-        android:text="@string/refresh"
         android:layout_marginBottom="8dp"
         app:layout_constraintBottom_toTopOf="@+id/hLogOut"
         android:layout_marginRight="8dp"
         app:layout_constraintRight_toRightOf="parent"
-        android:layout_marginEnd="8dp" />
+        android:layout_marginEnd="8dp"
+        android:background="@drawable/reloadbutton"/>
 
     <Button
         android:id="@+id/hLogin4"
         android:layout_width="0dp"
-        android:layout_height="43dp"
+        android:layout_height="48dp"
         android:layout_marginLeft="0dp"
         android:layout_marginRight="0dp"
-        android:text="@string/LoginStation"
+        android:background="@drawable/loginbuttongreen"
+        app:layout_constraintBaseline_toBaselineOf="@+id/hStation4"
         app:layout_constraintHorizontal_bias="1.0"
         app:layout_constraintLeft_toRightOf="@+id/hStation4"
-        app:layout_constraintRight_toRightOf="parent"
-        app:layout_constraintBaseline_toBaselineOf="@+id/hStation4" />
+        app:layout_constraintRight_toRightOf="parent" />
 
     <TextView
         android:id="@+id/hStation4"
-        android:layout_width="119dp"
+        android:layout_width="128dp"
         android:layout_height="30dp"
-        android:text="@string/Station4"
-        tools:layout_editor_absoluteX="0dp"
         android:layout_marginTop="34dp"
-        app:layout_constraintTop_toBottomOf="@+id/hStatus3" />
+        android:text="@string/Station4"
+        app:layout_constraintTop_toBottomOf="@+id/hStatus3"
+        app:layout_constraintLeft_toLeftOf="parent"
+        android:layout_marginLeft="0dp" />
 
     <ProgressBar
         android:id="@+id/hStatus4"
@@ -198,7 +203,7 @@
         app:layout_constraintLeft_toRightOf="@+id/hStatus4"
         app:layout_constraintRight_toRightOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/hLogin4"
-        tools:layout_editor_absoluteY="334dp"
-        tools:layout_editor_absoluteX="131dp" />
+        tools:layout_editor_absoluteX="131dp"
+        tools:layout_editor_absoluteY="334dp" />
 
 </android.support.constraint.ConstraintLayout>

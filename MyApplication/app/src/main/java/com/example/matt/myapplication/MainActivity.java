@@ -48,7 +48,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         loginLink.setOnClickListener(this);
 
 
-        if(mAuth.getCurrentUser()!=null) { // means theat the user is already logged in
+        if(FirebaseAuth.getInstance().getCurrentUser()!=null) { // means theat the user is already logged in
             //profile activity
             finish();
             startActivity(new Intent(getApplicationContext(),HomeScreenActivity.class));

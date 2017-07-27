@@ -4,16 +4,16 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.os.AsyncTask;
 import android.support.v4.app.ActivityCompat;
-import android.support.v4.content.ContextCompat;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.app.NotificationCompat;
 import android.telephony.SmsManager;
 import android.telephony.TelephonyManager;
 import android.util.Log;
+import android.view.LayoutInflater;
 import android.widget.Button;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -22,58 +22,52 @@ import android.widget.Toast;
 
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.database.ChildEventListener;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
-import com.google.firebase.database.Query;
 import com.google.firebase.database.ValueEventListener;
 import com.google.firebase.iid.FirebaseInstanceId;
-import com.google.firebase.messaging.FirebaseMessaging;
-import com.google.firebase.messaging.RemoteMessage;
-import com.google.firebase.quickstart.fcm.Messaging;
 
+import org.apache.commons.net.ftp.FTP;
+import org.apache.commons.net.ftp.FTPClient;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.json.JSONTokener;
 
-import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
-import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
+import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
-import java.net.ProtocolException;
+import java.net.SocketException;
 import java.net.URL;
+import java.util.Date;
 import java.util.HashMap;
-import java.util.Hashtable;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.StringTokenizer;
 
 import static android.Manifest.permission.READ_PHONE_STATE;
 import static android.Manifest.permission.SEND_SMS;
+import static java.lang.Math.abs;
 
 
 public class HomeScreenActivity extends AppCompatActivity implements View.OnClickListener{
+    //For error checking
     private static final String TAG ="Matt";
+    //cooldown for when a message can be sent(5 minutes represented in milliseconds)
+    double cooldown = 300000.0;
     //Keeps track of whether you are logged in or not
     private boolean logStatus;
-    //Keeps track of which station
-    private int stationTracker=0;
+    //Keeps track of whether a station is taken or not
+    private boolean stationStatus=false;
     //String variables
     private String API_URL1="https://lit-retreat-58620.herokuapp.com/nearCait";
     private String API_URL2="https://lit-retreat-58620.herokuapp.com/nearHandicap";
-    private String API_URL3="";
-    private String API_URL4="";
     private String a="Unavailable";
-    private String b="Send Request to Person";
-    private String c="Login to Station";
     private String d="Loading";
-    private String e="Logout of Station";
-    private String f;
     //Message token
     private String token= FirebaseInstanceId.getInstance().getToken();
     //Variables for visible stuff
@@ -103,15 +97,12 @@ public class HomeScreenActivity extends AppCompatActivity implements View.OnClic
     private DatabaseReference databaseReference;
     private FirebaseUser user;
     //Listener for phone number in database
-    private ValueEventListener postListener;
-    private ValueEventListener postListener1;
-    private ValueEventListener postListener2;
+    private ValueEventListener postListener;//actively watches station log status
+    private ValueEventListener postListener1;//Watches stations once when called
+    private ValueEventListener postListener2;//watches users once when called
     //Phone Message and phone number
     private String message="Can I have your space?";
     private String phoneNo;
-    private String recipient="";
-    //Class for ftp
-    MyFTPClientFunctions eboard=new MyFTPClientFunctions();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -174,15 +165,21 @@ public class HomeScreenActivity extends AppCompatActivity implements View.OnClic
         TelephonyManager tMgr = (TelephonyManager)this.getSystemService(Context.TELEPHONY_SERVICE);
         phoneNo = tMgr.getLine1Number();
         //Checks to see who is logged into a station already
-        //Initializes listener for database
-
-
-        Retriever(Login1);
-        Retriever(Login2);
-        Retriever(Login3);
-        Retriever(Login4);
-
-
+        Retriever(Login1,1);
+        Retriever(Login2,1);
+        Retriever(Login3,1);
+        Retriever(Login4,1);
+        //Checks to see if the log status for stations has changed in realtime
+        Update(Login1);
+        Update(Login2);
+        Update(Login3);
+        Update(Login4);
+        //Pop up dialogs
+        /*
+        AlertDialog.Builder builder = new AlertDialog.Builder(new HomeScreenActivity());
+        LayoutInflater inflater = new HomeScreenActivity().getLayoutInflater();
+        builder.setView(inflater.inflate(R.layout.custom_message, null));
+        */
     }
     /*
    //
@@ -190,56 +187,186 @@ public class HomeScreenActivity extends AppCompatActivity implements View.OnClic
    //
    //
     */
-    /*
-    //'128.6.22.22','rutgers3dlab','rutgersmse','Port 21','Website',
-    public void eBoardAPI(String server, int portNumber, String user, String password, String filename, String localFile){
-        eboard.downloadAndSaveFile(server,portNumber,user,password,filename,localFile);
+    //Gets information on Stations 2 and 4 using ftp
+    private class eBoardApi extends AsyncTask<String,Void,String> {
+
+        //Initializes buttons and textviews
+        private TextView Station;
+        private TextView TimeLeft;
+        private ProgressBar Status;
+
+
+        @Override
+        protected String doInBackground(String... params) {
+            //Sets parameters and ftp client
+            FTPClient ftp = null;
+            String server= params[0];
+            Integer portNumber= Integer.valueOf(params[1]);
+            String username=params[2];
+            String password=params[3];
+            String filename=params[4];
+            String localFile=params[5];
+            String station=params[6];
+
+            //Decides which station is used for operation
+            if( station.equals("Station2") ) {
+                Station=Station2;
+                TimeLeft=TimeLeft2;
+                Status=Status2;
+            }
+            else {
+                Station=Station4;
+                TimeLeft=TimeLeft4;
+                Status=Status4;
+            }
+
+            //Gets eboard data using ftp
+            try {
+                //Connects to ftp client
+                ftp = new FTPClient();
+                ftp.connect(server, portNumber);
+                ftp.login(username, password);
+                ftp.setFileType(FTP.BINARY_FILE_TYPE);
+                ftp.enterLocalPassiveMode();
+                //changes directory
+                ftp.changeWorkingDirectory(localFile);
+                //Reads file
+                InputStream inStream = ftp.retrieveFileStream(filename);
+                InputStreamReader isr = new InputStreamReader(inStream, "UTF8");
+                BufferedReader bufferedReader = new BufferedReader(isr);
+                StringBuilder stringBuilder = new StringBuilder();
+                String line;
+                while ((line = bufferedReader.readLine()) != null) {
+                    stringBuilder.append(line);
+                }
+                bufferedReader.close();
+                //Returns contents of file
+                return stringBuilder.toString();
+            } catch (UnsupportedEncodingException e1) {
+                e1.printStackTrace();
+            } catch (SocketException e1) {
+                e1.printStackTrace();
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            } catch (IOException e1) {
+                e1.printStackTrace();
+            } finally {
+                if (ftp != null) {
+                    try {
+                        ftp.logout();
+                        ftp.disconnect();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+            return null;
+        }
+        @Override
+        public void onPostExecute(String response){
+            //Gets individual data from csv file
+            StringTokenizer tokens = new StringTokenizer(response, ",");
+            tokens.nextToken();
+            tokens.nextToken();
+            String third = tokens.nextToken();//Egauge Station2
+            String fourth = tokens.nextToken();//Egauge Station2
+            String fifth = tokens.nextToken();//Egauge Station4
+            String sixth = tokens.nextToken();//Egauge Station4
+            tokens.nextToken();
+            tokens.nextToken();
+            tokens.nextToken();
+            String tenth = tokens.nextToken();//Juicenet Station1
+            tokens.nextToken();
+            tokens.nextToken();
+            String thirteenth = tokens.nextToken();//Juicenet Station3
+            //Trims data to the necessary components
+            String sub1=third.substring(0,third.length()-2);
+            String sub2=fourth.substring(0,fourth.length()-2);
+            String sub3=fifth.substring(0,fifth.length()-2);
+            String sub4=sixth.substring(0,sixth.length()-2);
+            String sub5=tenth.substring(0,tenth.length()-3);
+            String sub6=thirteenth;
+            //Converts data to decimals from string
+            Double power1= Double.valueOf(sub1);
+            Double power2= Double.valueOf(sub2);
+            Double power3= Double.valueOf(sub3);
+            Double power4= Double.valueOf(sub4);
+            Double power5= 1000*Double.valueOf(sub5);
+            Double power6= 1000*Double.valueOf(sub6);
+            //Finds power draw from each station
+            Double stat2=power1+power2-power5;
+            Double stat4=power3+power4-power6;
+            //If getting info for station 2
+            if(Station==Station2){
+                if( stat2==0 ){
+                    TimeLeft.setText("Open");
+                    Status.setProgress(0);
+                    Status.setMax(100);
+                }
+                else if( 0<abs(stat2) & abs(stat2)<1000){
+                    TimeLeft.setText("Not Charging");
+                }
+                else if( abs(stat2)>1000 ){
+                    TimeLeft.setText("Charging");
+                }
+            }
+            //If getting info for station 4
+            else{
+                if( stat4==0 ){
+                    TimeLeft.setText("Open");
+                    Status.setProgress(0);
+                    Status.setMax(100);
+                }
+                else if( 0<abs(stat4) & abs(stat4)<1000){
+                    TimeLeft.setText("Not Charging");
+                }
+                else if( abs(stat4)>1000 ){
+                    TimeLeft.setText("Charging");
+                }
+            }
+
+        }
     }
-    */
     /*
     //
     //
     //
     //
      */
+    //Gets information on Stations 1 and 3 using juicenet api
     private class JuicenetApi extends AsyncTask<String,Void,String> {
         private TextView Station;
         private TextView TimeLeft;
         private ProgressBar Status;
-        private Button Login;
-        protected void onPreExecute(){
-            TimeLeft1.setText(d);
-            TimeLeft3.setText(d);
-        }
         ///
         ///
+        //Other portion of api request is done on a website
         protected String doInBackground(String...API_URL) {
             //Decides which station is used for operation
             if( API_URL[0].equals("https://lit-retreat-58620.herokuapp.com/nearCait") ) {
                 Station=Station1;
                 TimeLeft=TimeLeft1;
                 Status=Status1;
-                Login=Login1;
             }
             else {
                 Station=Station3;
                 TimeLeft=TimeLeft3;
                 Status=Status3;
-                Login=Login3;
             }
             //Reads JSON as String
             HttpURLConnection client = null;
 
             try {
+                //Connects to url
                 URL url = new URL(API_URL[0]);
                 client = (HttpURLConnection) url.openConnection();
-
+                //Reads websites contents
                 client.setRequestMethod("GET");
                 BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(client.getInputStream()));
                 StringBuilder stringBuilder = new StringBuilder();
                 String line;
                 while ((line = bufferedReader.readLine()) != null) {
-                    stringBuilder.append(line).append("\n");
+                    stringBuilder.append(line).append("/n");
                 }
                 bufferedReader.close();
                 return stringBuilder.toString();
@@ -255,13 +382,11 @@ public class HomeScreenActivity extends AppCompatActivity implements View.OnClic
         ///
         //Takes the JSON string and uses it to perform tasks
         public void onPostExecute(String response){
-
             if(response == null) {
                 response = "THERE WAS AN ERROR";
                 Station.setText(response);
                 return;
             }
-
             try{
                 //Converts string to JSON
                 JSONObject object = (JSONObject) new JSONTokener(response).nextValue();
@@ -284,9 +409,6 @@ public class HomeScreenActivity extends AppCompatActivity implements View.OnClic
                     Integer timeRemaining=timeLeft/60;
                     Integer percent=( (timeSoFar*100) / max) ;
                     TimeLeft.setText( (timeSoFar/60) +" minutes // "+timeRemaining+" minutes // "+percent+"%");
-                    if( !( Login.getId()==stationTracker )  ){
-                        Login.setText(b);
-                    }
                     //Issues notification when car is 90% charged
                     if( percent >= 90 ){
                         // Sets an ID for the notification
@@ -304,16 +426,10 @@ public class HomeScreenActivity extends AppCompatActivity implements View.OnClic
                     Status.setMax(max);
                     Status.setProgress(timeSoFar);
                     TimeLeft.setText(R.string.notCharging);
-                    if( !( Login.getId()==stationTracker ) ){
-                        Login.setText(b);
-                    }
                 }
                 //When the Station is not plugged in but someone is still logged into it
                 else{
                     TimeLeft.setText(R.string.open);
-                    if( !( Login.getId()==stationTracker ) ){
-                        Login.setText(b);
-                    }
                     Status.setMax(max);
                     Status.setProgress(0);
                 }
@@ -332,59 +448,37 @@ public class HomeScreenActivity extends AppCompatActivity implements View.OnClic
 //
 //
  */
-//Retrieves data from database to see who is logged into a station
-    public void Retriever(final Button log){
+//Retrieves from database who is logged into a specified station
+    //***IMPORTANT***//
+    //Any other functions using data retrieved from data base must be used within "onDataChanged"
+    //***IMPORTANT***//
+    public void Retriever(final Button log,final int method){
         //Checks to see if you are logged in to any stations
         postListener1 = new ValueEventListener() {
 
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
                 Logger post = dataSnapshot.child( "stations" ).child( String.valueOf(log.getId()) ).getValue( Logger.class );
-
-                String name=post.name;
-                if( name.equals(phoneNo.toString())   ){
-                    log.setText(e);
-                    logStatus=true;
-                    stationTracker=log.getId();
-                    StationUpdate(log);
+                String val =post.name;
+                switch(method){
+                    case 1:
+                        StationUpdate(log,val);
+                        break;
+                    case 2:
+                        sendSMS(val,message);
+                        break;
+                    case 3:
+                        checkStatus(val);
+                        break;
                 }
             }
 
             @Override
             public void onCancelled(DatabaseError databaseError) {
-                // Getting Post failed, log a message
                 Toast.makeText(HomeScreenActivity.this, "Couldn't retrieve data", Toast.LENGTH_SHORT).show();
-                // ...
-
             }
-
         };
-        //Checks for other people who are logged in to any stations
-        postListener2 = new ValueEventListener() {
-
-            @Override
-            public void onDataChange(DataSnapshot dataSnapshot) {
-                Logger post = dataSnapshot.child( "stations" ).child( String.valueOf(log.getId()) ).getValue( Logger.class );
-
-                String name=post.name;
-                if( !( name.equals( phoneNo.toString()) ) & !(name.equals("None")) ){
-                    log.setText(b);
-                    StationUpdate(log);
-                }
-            }
-
-            @Override
-            public void onCancelled(DatabaseError databaseError) {
-                // Getting Post failed, log a message
-                Toast.makeText(HomeScreenActivity.this, "Couldn't retrieve data", Toast.LENGTH_SHORT).show();
-                // ...
-
-            }
-
-        };
-
         databaseReference.addListenerForSingleValueEvent(postListener1);
-        databaseReference.addListenerForSingleValueEvent(postListener2);
     }
     /*
     //
@@ -399,7 +493,13 @@ public void Login(final Button log){
     if(logStatus){
         Toast.makeText(HomeScreenActivity.this, "You can't login to two stations",
                 Toast.LENGTH_SHORT).show();
-                f=c;
+        return;
+    }
+    //Checks to make sure no one else is logged in
+    Retriever(log,3);
+    if( stationStatus ){
+        Toast.makeText(HomeScreenActivity.this, "Someone is logged in already",
+                Toast.LENGTH_SHORT).show();
         return;
     }
     //Initializes user information
@@ -411,12 +511,11 @@ public void Login(final Button log){
     databaseReference.updateChildren(childUpdates);
     //Sets log Status
     logStatus=true;
-    stationTracker=log.getId();
-    f=e;
     //Tells User operation was successful
     Toast.makeText(HomeScreenActivity.this, "You are logged into the station.",
             Toast.LENGTH_SHORT).show();
-    StationUpdate(log);
+    //Updates homescreen
+    Retriever(log,1);
 }
     /*
     //
@@ -439,9 +538,7 @@ public void Login(final Button log){
                 Toast.LENGTH_SHORT).show();
         //Sets log Status
         logStatus=false;
-        StationUpdate(log);
-        stationTracker=0;
-        f=c;
+        Retriever(log,1);
     }
     /*
     //
@@ -449,10 +546,42 @@ public void Login(final Button log){
     //
     //
      */
-    private void sendSMS(String phoneNumber, String message)
-    {
-            SmsManager sms = SmsManager.getDefault();
-            sms.sendTextMessage(phoneNumber, null, message, null, null);
+    private void sendSMS(final String phoneNumber, final String message) {
+        //Looks to see when last message was sent
+        postListener2 = new ValueEventListener() {
+
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                Post post = dataSnapshot.child( "users" ).child( user.getUid() ).getValue( Post.class );
+                String name=post.name;
+                String type=post.type;
+
+                Date time =post.time;
+                Date now=new Date();
+                Log.w(TAG, String.valueOf(now.getTime()));
+                Log.w(TAG, String.valueOf(time.getTime()));
+                Log.w(TAG, String.valueOf( now.getTime()-time.getTime() ));
+                if( ( now.getTime() - time.getTime() ) >= cooldown ){
+                    //Sends Message
+                    SmsManager sms = SmsManager.getDefault();
+                    sms.sendTextMessage(phoneNumber, null, message, null, null);
+                    Toast.makeText(HomeScreenActivity.this, "Message Sent", Toast.LENGTH_SHORT).show();
+                    //Updates database with the time the message was sent
+                    Post userInfo=new Post(name,type,phoneNo,now);
+                    databaseReference.child("users").child( user.getUid() ).setValue(userInfo);
+                }
+                else{
+                    Toast.makeText(HomeScreenActivity.this, "You can only send a message once every five minutes", Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+                Toast.makeText(HomeScreenActivity.this, "Couldn't retrieve time previous message was sent", Toast.LENGTH_SHORT).show();
+            }
+
+        };
+        databaseReference.addListenerForSingleValueEvent(postListener2);
     }
     /*
     //
@@ -460,57 +589,146 @@ public void Login(final Button log){
     //
     //
      */
-    //Access api response from custom website and updates stations when someone logs into one
-    public void StationUpdate(final Button log){
-        //Logout
-        if( !logStatus & stationTracker==log.getId() ){
-            switch (log.getId()){
-                //Station 1
-                case 2131427431:
+    //Updates home screen with information from database
+    public void StationUpdate(final Button log,String val){
+        //Updates home screen
+        switch(log.getId()){
+            //
+            //Station 1
+            //
+            case 2131427431:
+                //No one is logged into spot
+                if(val.equals("None")){
                     TimeLeft1.setText("Open");
                     Status1.setMax(100);
                     Status1.setProgress(0);
-                    break;
-                //Station 2
-                case 2131427439:
+                    log.setBackgroundResource(R.drawable.loginbuttongreen);
+                }
+                //You are logged into spot
+                else if( val.equals(phoneNo) ){
+                    logStatus=true;
+                    TimeLeft1.setText(d);
+                    log.setBackgroundResource(R.drawable.logoutbuttonred);
+                    new JuicenetApi().execute(API_URL1);
+                }
+                //Some one else is logged into this spot
+                else{
+                    TimeLeft1.setText(d);
+                    log.setBackgroundResource(R.drawable.sendrequestbutton);
+                    new JuicenetApi().execute(API_URL1);
+                }
+                break;
+            //
+            //Station 2
+            //
+            case 2131427439:
+                //No one is logged into spot
+                if(val.equals("None")){
                     TimeLeft2.setText("Open");
                     Status2.setMax(100);
                     Status2.setProgress(0);
-                    break;
-                //Station 3
-                case 2131427441:
+                    log.setBackgroundResource(R.drawable.loginbuttongreen);
+                }
+                //You are logged into spot
+                else if( val.equals(phoneNo) ){
+                    logStatus=true;
+                    TimeLeft2.setText(d);
+                    log.setBackgroundResource(R.drawable.logoutbuttonred);
+                    new eBoardApi().execute("128.6.22.22", "21", "rutgers3dlab", "rutgersmse", "transfer.csv", "Website","Station2");
+                }
+                //Some one else is logged into this spot
+                else{
+                    TimeLeft2.setText(d);
+                    log.setBackgroundResource((R.drawable.sendrequestbutton));
+                    new eBoardApi().execute("128.6.22.22", "21", "rutgers3dlab", "rutgersmse", "transfer.csv", "Website","Station2");
+                }
+                break;
+            //
+            //Station 3
+            //
+            case 2131427441:
+                //No one is logged into spot
+                if(val.equals("None")){
                     TimeLeft3.setText("Open");
                     Status3.setMax(100);
                     Status3.setProgress(0);
-                    break;
-                //Station 4
-                case 2131427445:
+                    log.setBackgroundResource(R.drawable.loginbuttongreen);
+                }
+                //You are logged into spot
+                else if( val.equals(phoneNo) ){
+                    logStatus=true;
+                    TimeLeft3.setText(d);
+                    log.setBackgroundResource(R.drawable.logoutbuttonred);
+                    new JuicenetApi().execute(API_URL2);
+                }
+                //Some one else is logged into this spot
+                else{
+                    TimeLeft3.setText(d);
+                    log.setBackgroundResource((R.drawable.sendrequestbutton));
+                    new JuicenetApi().execute(API_URL2);
+                }
+                break;
+            //
+            //Station 4
+            //
+            case 2131427445:
+                //No one is logged into spot
+                if(val.equals("None")){
                     TimeLeft4.setText("Open");
                     Status4.setMax(100);
                     Status4.setProgress(0);
-                    break;
+                    log.setBackgroundResource(R.drawable.loginbuttongreen);
+                }
+                //You are logged into spot
+                else if( val.equals(phoneNo) ){
+                    logStatus=true;
+                    TimeLeft4.setText(d);
+                    log.setBackgroundResource(R.drawable.logoutbuttonred);
+                    new eBoardApi().execute("128.6.22.22", "21", "rutgers3dlab", "rutgersmse", "transfer.csv", "Website","Station4");
+                }
+                //Some one else is logged into this spot
+                else{
+                    TimeLeft4.setText(d);
+                    log.setBackgroundResource((R.drawable.sendrequestbutton));
+                    new eBoardApi().execute("128.6.22.22", "21", "rutgers3dlab", "rutgersmse", "transfer.csv", "Website","Station4");
+                }
+                break;
+        }
+    }
+    /*
+    //
+    //
+    //
+    //
+     */
+    //Watches the database for changes and updates app when it does
+    public void Update(final Button log){
+        postListener = new ValueEventListener() {
 
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                Logger post = dataSnapshot.child( "stations" ).child( String.valueOf(log.getId()) ).getValue( Logger.class );
+                String val =post.name;
+                StationUpdate(log,val);
             }
-        }
-        //Login for user and update stations others are logged into
-        else{
-            switch (log.getId()){
-                //Station 1
-                case 2131427431:
-                    new JuicenetApi().execute(API_URL1);
-                    break;
-                //Station 2
-                case 2131427439:
-                    break;
-                //Station 3
-                case 2131427441:
-                    new JuicenetApi().execute(API_URL2);
-                    break;
-                //Station 4
-                case 2131427445:
-                    break;
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+                Log.w(TAG, "Yes");
+                Toast.makeText(HomeScreenActivity.this, "Couldn't retrieve Active Station data", Toast.LENGTH_SHORT).show();
             }
-        }
+        };
+        databaseReference.addValueEventListener(postListener);
+    }
+    /*
+    //
+    //
+    //
+    //
+     */
+    //Checks to see if anyone is already logged into station
+    public void checkStatus( String value ){
+        stationStatus = !value.equals("None");
     }
     /*
     //
@@ -524,55 +742,58 @@ public void Login(final Button log){
         //Station button protocol
         if(v==Login1 | v==Login2 | v==Login3 | v==Login4){
             final Button click= (Button) v;
+            //Multiple Login Error
             if( click.getText().equals(a) ) {
                 Toast.makeText(HomeScreenActivity.this, "You can't log in while someone's car is charging.",
                         Toast.LENGTH_SHORT).show();
             }
-            else if( click.getText().equals(b) ){
-                postListener1 = new ValueEventListener() {
-                    @Override
-                    public void onDataChange(DataSnapshot dataSnapshot) {
-
-                        Logger post = dataSnapshot.child("stations").child(String.valueOf(v.getId())).getValue(Logger.class);
-                        //Declares variables for storage
-                        recipient=post.name;
-                        sendSMS(recipient,message);
-                    }
-
-                    @Override
-                    public void onCancelled(DatabaseError databaseError) {
-                        // Getting Post failed, log a message
-                        Toast.makeText(HomeScreenActivity.this, "Couldn't retrieve data", Toast.LENGTH_SHORT).show();
-                        // ...
-                    }
-                };
-                databaseReference.addListenerForSingleValueEvent(postListener1);
+            //Send Message
+            else if( click.getBackground().getConstantState().equals
+                    (getResources().getDrawable(R.drawable.sendrequestbutton).getConstantState()) ){
+                Retriever(click,2);
             }
-            else if( click.getText().equals(c) ){
+            //Login
+            else if( click.getBackground().getConstantState().equals
+                    (getResources().getDrawable(R.drawable.loginbuttongreen).getConstantState()) ){
                 Login( click );
-                click.setText(f);
             }
-            else if( click.getText().equals(e) ){
+            //Logout of station
+            else if( click.getBackground().getConstantState().equals
+                    (getResources().getDrawable(R.drawable.logoutbuttonred).getConstantState()) ){
                 Logout( click );
-                click.setText(f);
             }
         }
-        //Logout
+        //Logout of app
         else if(v==Logout){
-            mAuth.signOut();
+            //detaches Listeners
+            databaseReference.removeEventListener(postListener);
+            databaseReference.removeEventListener(postListener);
+            databaseReference.removeEventListener(postListener);
+
+            //Signs person out of the app
+            FirebaseAuth.getInstance().signOut();
+            //Moves to the login screen
             startActivity(new Intent(HomeScreenActivity.this,MainActivity.class));
         }
         //Update Profile
         else if(v==Update){
+            //detaches Listeners
+            databaseReference.removeEventListener(postListener);
+            databaseReference.removeEventListener(postListener);
+            databaseReference.removeEventListener(postListener);
+            databaseReference.removeEventListener(postListener);
+            //Moves to update profile activity
             startActivity(new Intent(HomeScreenActivity.this,UpdateActivity.class));
         }
         //Refresh
         else if(v==Refresh){
-            Retriever(Login1);
-            Retriever(Login2);
-            Retriever(Login3);
-            Retriever(Login4);
+            //detaches Listeners
+            databaseReference.removeEventListener(postListener);
+            databaseReference.removeEventListener(postListener);
+            databaseReference.removeEventListener(postListener);
+            databaseReference.removeEventListener(postListener);
+            //refresh homescreen
+            startActivity(new Intent(HomeScreenActivity.this,HomeScreenActivity.class));
         }
     }
-
 }

@@ -29,6 +29,7 @@ import com.google.firebase.database.IgnoreExtraProperties;
 import com.google.firebase.database.Query;
 import com.google.firebase.database.ValueEventListener;
 
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -49,7 +50,6 @@ public class UpdateActivity extends AppCompatActivity implements View.OnClickLis
     private String myUserId;
     //Listener for Database
     private ValueEventListener postListener;
-
     /*
     ///
     ///
@@ -113,24 +113,23 @@ public class UpdateActivity extends AppCompatActivity implements View.OnClickLis
     //
     //
      */
-    //updates Users profile
-    public void updateUserInformation(){
-        //Declares variables for storage
+    public void updateEmailPassword(){
         String oldEmail=OldEmail.getText().toString();
-        String oldPassword=OldPassword.getText().toString();
-        String name = Username.getText().toString();
-        String CarType = Type.getText().toString();
         String email = Email.getText().toString();
+        String oldPassword=OldPassword.getText().toString();
         String password=Password.getText().toString();
-        String phoneNo=PhoneNo;
+        //Checks old password and email
+        if( oldEmail.isEmpty() | oldPassword.isEmpty() ){
+            Toast.makeText(UpdateActivity.this, "Please enter old email and password to change email and password", Toast.LENGTH_SHORT).show();
+            return;
+        }
         //Reauthenticates user for password and email update
         // Get auth credentials from the user for re-authentication. The example below shows
 // email and password credentials but there are multiple possible providers,
 // such as GoogleAuthProvider or FacebookAuthProvider.
         AuthCredential credential = EmailAuthProvider
                 .getCredential(oldEmail, oldPassword);
-
-// Prompt the user to re-provide their sign-in credentials
+        // Prompt the user to re-provide their sign-in credentials
         user.reauthenticate(credential)
                 .addOnCompleteListener(new OnCompleteListener<Void>() {
                     @Override
@@ -139,7 +138,7 @@ public class UpdateActivity extends AppCompatActivity implements View.OnClickLis
                                 Toast.LENGTH_SHORT).show();
                     }
                 });
-        //Checks email
+        //Checks email for length
         if(TextUtils.isEmpty(email)) {
             //if username is empty do this
             Toast.makeText(UpdateActivity.this, "Please enter email", Toast.LENGTH_SHORT).show();
@@ -163,8 +162,8 @@ public class UpdateActivity extends AppCompatActivity implements View.OnClickLis
                         }
                     }
                 });
-        //Checks password
-        if(password.length() < 6 ){
+        //Checks password length
+        if(password.length() < 6 | password.isEmpty()){
             //if password is empty
             Toast.makeText(this, "Please enter a password with at least 6 Characters", Toast.LENGTH_SHORT).show();
             //stopping the function execution further
@@ -185,9 +184,28 @@ public class UpdateActivity extends AppCompatActivity implements View.OnClickLis
                         }
                     }
                 });
+    }
+    /*
+    //
+    //
+    //
+    //
+     */
+    //updates Users profile info
+    public void updateUserInformation(){
+        //Declares variables for storage
+        String name = Username.getText().toString();
+        String CarType = Type.getText().toString();
+        String phoneNo=PhoneNo;
+        Date now=new Date();
+        //checks to see if fields are empty
+        if( name.isEmpty() | CarType.isEmpty() | phoneNo.isEmpty() ){
+            Toast.makeText(UpdateActivity.this, "Information Not Updated",
+                    Toast.LENGTH_SHORT).show();
 
+        }
         //Initializes user information
-        Post post = new Post(name,CarType,phoneNo);
+        Post post = new Post(name,CarType,phoneNo,now);
         Map<String, Object> postValues = post.toMap();
 
         Map<String, Object> childUpdates = new HashMap<>();
@@ -197,7 +215,6 @@ public class UpdateActivity extends AppCompatActivity implements View.OnClickLis
         //Tells User operation was successful
         Toast.makeText(UpdateActivity.this, "Information Updated",
                 Toast.LENGTH_SHORT).show();
-
     }
     /*
     //
@@ -208,6 +225,9 @@ public class UpdateActivity extends AppCompatActivity implements View.OnClickLis
 //Registers user and moves to homescreen when button is clicked
     @Override
     public void onClick(View v) {
+        //Updates email and password
+        updateEmailPassword();
+        //Emails user info
         updateUserInformation();
         //detaches listener
         databaseReference.removeEventListener(postListener);

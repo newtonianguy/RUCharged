@@ -24,6 +24,8 @@ import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 
+import java.util.Date;
+
 import static android.Manifest.permission.READ_PHONE_STATE;
 import static android.Manifest.permission.SEND_SMS;
 
@@ -113,9 +115,9 @@ public class RegisterActivity extends AppCompatActivity implements View.OnClickL
         String name = Username.getText().toString();
         String CarType = Type.getText().toString();
         String Number=PhoneNo;
-
+        Date Now=new Date();
         //Initializes user information
-        User userInformation = new User(name, CarType,Number);
+        Post userInformation = new Post(name, CarType,Number,Now);
         //Gets current User for user Id
         FirebaseUser user = mAuth.getCurrentUser();
         //Stores information
@@ -123,25 +125,6 @@ public class RegisterActivity extends AppCompatActivity implements View.OnClickL
     }
 
 
-
-    //Class for saving user information
-    public class User {
-
-        public String name;
-        public String type;
-        public String number;
-
-        public User() {
-            // Default constructor required for calls to DataSnapshot.getValue(User.class)
-        }
-
-        public User(String Name, String Type,String Number) {
-            this.name = Name;
-            this.type = Type;
-            this.number=Number;
-        }
-
-    }
 
 //Registers user and moves to homescreen when button is clicked
     @Override

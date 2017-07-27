@@ -16,9 +16,14 @@
     <string name="Station2">Station 2</string>
     <string name="Station3">Station 3</string>
     <string name="logout">Logout</string>
-    <string name="LoginStation">Log into Station</string>
+    <string name="LoginStation">Login to Station</string>
     <string name="refresh">Refresh</string>
     <string name="Station4">Station 4</string>
     <string name="notCharging">Not Charging</string>
+    <string name="loading">Loading</string>
+    <string name="oldPassword">Old Password</string>
+    <string name="oldEmail">Old Email</string>
+    <string name="PhoneNumber">Phone Number</string>
+    <string name="MessageRequest">Message Request</string>
 
 </resources>
