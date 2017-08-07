@@ -484,7 +484,7 @@ public class HomeScreenActivity extends AppCompatActivity implements View.OnClic
     //
      */
 //Logs a person into a desired station
-public void Login(final Button log){
+    public void Login(final Button log){
     //Checks log status
     if(logStatus){
         Toast.makeText(HomeScreenActivity.this, "You can't login to two stations",
@@ -733,7 +733,7 @@ public void Login(final Button log){
     //
      */
     //Code for custom message pop (dialog)
-public void CustomMessage(final String phoneNumber){
+    public void CustomMessage(final String phoneNumber){
     // custom dialog
     final Dialog dialog = new Dialog(HomeScreenActivity.this);
     dialog.setContentView(R.layout.custom_message);
