@@ -1,5 +1,6 @@
 package com.example.matt.myapplication;
 
+import android.app.Dialog;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
@@ -15,6 +16,7 @@ import android.telephony.TelephonyManager;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.view.View;
@@ -101,7 +103,7 @@ public class HomeScreenActivity extends AppCompatActivity implements View.OnClic
     private ValueEventListener postListener1;//Watches stations once when called
     private ValueEventListener postListener2;//watches users once when called
     //Phone Message and phone number
-    private String message="Can I have your space?";
+    private String phoneMessage="";
     private String phoneNo;
 
     @Override
@@ -174,12 +176,6 @@ public class HomeScreenActivity extends AppCompatActivity implements View.OnClic
         Update(Login2);
         Update(Login3);
         Update(Login4);
-        //Pop up dialogs
-        /*
-        AlertDialog.Builder builder = new AlertDialog.Builder(new HomeScreenActivity());
-        LayoutInflater inflater = new HomeScreenActivity().getLayoutInflater();
-        builder.setView(inflater.inflate(R.layout.custom_message, null));
-        */
     }
     /*
    //
@@ -465,7 +461,7 @@ public class HomeScreenActivity extends AppCompatActivity implements View.OnClic
                         StationUpdate(log,val);
                         break;
                     case 2:
-                        sendSMS(val,message);
+                        CustomMessage(val);
                         break;
                     case 3:
                         checkStatus(val);
@@ -488,7 +484,7 @@ public class HomeScreenActivity extends AppCompatActivity implements View.OnClic
     //
      */
 //Logs a person into a desired station
-public void Login(final Button log){
+    public void Login(final Button log){
     //Checks log status
     if(logStatus){
         Toast.makeText(HomeScreenActivity.this, "You can't login to two stations",
@@ -546,7 +542,7 @@ public void Login(final Button log){
     //
     //
      */
-    private void sendSMS(final String phoneNumber, final String message) {
+    private void sendSMS(final String phoneNumber, final String message1) {
         //Looks to see when last message was sent
         postListener2 = new ValueEventListener() {
 
@@ -555,15 +551,15 @@ public void Login(final Button log){
                 Post post = dataSnapshot.child( "users" ).child( user.getUid() ).getValue( Post.class );
                 String name=post.name;
                 String type=post.type;
-
                 Date time =post.time;
                 Date now=new Date();
-                Log.w(TAG, String.valueOf(now.getTime()));
-                Log.w(TAG, String.valueOf(time.getTime()));
-                Log.w(TAG, String.valueOf( now.getTime()-time.getTime() ));
+                //Log.w(TAG, String.valueOf(now.getTime()));
+                //Log.w(TAG, String.valueOf(time.getTime()));
+                //Log.w(TAG, String.valueOf( now.getTime()-time.getTime() ));
                 if( ( now.getTime() - time.getTime() ) >= cooldown ){
                     //Sends Message
                     SmsManager sms = SmsManager.getDefault();
+                    String message=message1+"\n-"+name;
                     sms.sendTextMessage(phoneNumber, null, message, null, null);
                     Toast.makeText(HomeScreenActivity.this, "Message Sent", Toast.LENGTH_SHORT).show();
                     //Updates database with the time the message was sent
@@ -730,6 +726,36 @@ public void Login(final Button log){
     public void checkStatus( String value ){
         stationStatus = !value.equals("None");
     }
+    /*
+    //
+    //
+    //
+    //
+     */
+    //Code for custom message pop (dialog)
+    public void CustomMessage(final String phoneNumber){
+    // custom dialog
+    final Dialog dialog = new Dialog(HomeScreenActivity.this);
+    dialog.setContentView(R.layout.custom_message);
+    //Sets dialog variables
+    Button send=(Button) dialog.findViewById(R.id.pSend);
+    final EditText message=(EditText) dialog.findViewById(R.id.pMessage);
+    //Sets the message to be sent to whatever the user typed in
+    //default is "Can I have your space?"
+    send.setOnClickListener(new View.OnClickListener() {
+        @Override
+        public void onClick(View v) {
+            phoneMessage= message.getText().toString();
+            Log.w(TAG, phoneMessage);
+            if( phoneMessage.isEmpty() ){
+                phoneMessage="Can I have your space?";
+            }
+            sendSMS(phoneNumber,phoneMessage);
+            dialog.dismiss();
+        }
+    });
+    dialog.show();
+}
     /*
     //
     //
